@@ -12,4 +12,4 @@ Requires Node.js 18 or newer:
 node --test tests/frontend.test.cjs
 ```
 
-No Python DSP source, audio recordings, private test reports, or personalized measurements are included in this repository.
+No source code is included in this repository.
