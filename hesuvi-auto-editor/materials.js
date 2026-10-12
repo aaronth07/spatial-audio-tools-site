@@ -87,7 +87,10 @@
     if (baseString === undefined) baseString = dark ? 'oklch(0.1558 0.0063 285.64)' : 'oklch(0.94 0.0063 285.64)';
     const base = parseColor(baseString);
     if (!base) throw new TypeError('Invalid base color');
-    const blackText = luminance(base.rgb) >= .179;
+    const noiseAlpha = .008;
+    const noisy = rgb => [over([0, 0, 0], rgb, noiseAlpha), over([1, 1, 1], rgb, noiseAlpha)];
+    const baseNoise = noisy(base.rgb);
+    const blackText = Math.min(...baseNoise.map(rgb => contrast([0, 0, 0], rgb))) >= Math.min(...baseNoise.map(rgb => contrast([1, 1, 1], rgb)));
     const foreground = blackText ? [0, 0, 0] : [1, 1, 1];
     const tintL = blackText ? Math.max(.86, base.L - .04) : Math.min(base.L + .12, .30);
     const tintC = Math.min(base.C, .018), tint = gamut(tintL, tintC, base.H);
@@ -105,8 +108,8 @@
       return [0, 1].map(side => [0, 1, 2].map(channel => Math[side ? 'max' : 'min'](...corners.map(rgb => rgb[channel]))));
     }
     // Channel bounds include every overlap and intermediate radial-gradient opacity.
-    let ambientStep = dark ? 220 : 160;
-    while (ambientStep > 0 && ambientBounds(ambientStep / 1000).some(rgb => contrast(foreground, rgb) < 4.53)) ambientStep--;
+    let ambientStep = dark ? 121 : 88;
+    while (ambientStep > 0 && ambientBounds(ambientStep / 1000).flatMap(noisy).some(rgb => contrast(foreground, rgb) < 4.53)) ambientStep--;
     const ambientAlpha = ambientStep / 1000, ambientEnvelope = ambientBounds(ambientAlpha);
     const surfaces = {base: base.rgb};
     surfaces.workspace = over(tint, base.rgb, alphas.workspace);
@@ -140,21 +143,21 @@
       const first = over([1, 1, 1], rgb, highlightAlpha);
       return [first, over([1, 1, 1], first, highlightAlpha)];
     });
-    while (highlightAlpha > 0 && highlighted().some(rgb => contrast(foreground, rgb) < 4.5)) highlightAlpha = Math.max(0, highlightAlpha - .001);
-    const all = Object.values(surfaces).concat(highlighted(), Object.values(surfaces).map(rgb => rgbOf(toHex(rgb))));
+    while (highlightAlpha > 0 && highlighted().flatMap(noisy).some(rgb => contrast(foreground, rgb) < 4.5)) highlightAlpha = Math.max(0, highlightAlpha - .001);
+    const all = Object.values(surfaces).concat(highlighted(), Object.values(surfaces).map(rgb => rgbOf(toHex(rgb)))).flatMap(rgb => [rgb, ...noisy(rgb)]);
     const minContrast = rgb => Math.min(...all.map(bg => contrast(rgb, bg)));
     let muted = foreground;
     for (let amount = 72; amount <= 100; amount++) {
       muted = foreground.map(x => blackText ? 1 - amount / 100 : amount / 100);
       if (minContrast(rgbOf(toHex(muted))) >= 4.5) break;
     }
+    const plotChecks = plotBackgrounds.concat([rgbOf(toHex(surfaces.workspace))]).flatMap(rgb => [rgb, ...noisy(rgb)]);
     function trace(H) {
       const preferred = blackText ? .40 : .80;
-      const backgrounds = plotBackgrounds.concat([rgbOf(toHex(surfaces.workspace))]);
       let best = null;
       for (let i = 0; i <= 1000; i++) {
         const L = i / 1000, rgb = gamut(L, .16, H);
-        if (backgrounds.every(bg => contrast(rgb, bg) >= 3.01) && (!best || Math.abs(L - preferred) < Math.abs(best.L - preferred))) best = {L, rgb};
+        if (plotChecks.every(bg => contrast(rgb, bg) >= 3.01) && (!best || Math.abs(L - preferred) < Math.abs(best.L - preferred))) best = {L, rgb};
       }
       return {rgb: best.rgb, css: color(best.L, .16, H)};
     }
@@ -172,9 +175,9 @@
       edge: css['--border'], reflectionLeft: left.css, reflectionRight: right.css};
     const renderedText = rgbOf(css['--text']), renderedMuted = rgbOf(css['--muted']);
     return {css, canvas, contrastReport: {minimumText: minContrast(renderedText), minimumMuted: minContrast(renderedMuted),
-      minimumTrace: Math.min(...plotBackgrounds.map(bg => Math.min(contrast(canvas.left, bg), contrast(canvas.right, bg)))),
-      left: Math.min(...plotBackgrounds.map(bg => contrast(canvas.left, bg))), right: Math.min(...plotBackgrounds.map(bg => contrast(canvas.right, bg))), highlightAlpha,
-      ambientAlpha, ambientCombinedAlpha: 1 - (1 - ambientAlpha) ** 3,
+      minimumTrace: Math.min(...plotChecks.map(bg => Math.min(contrast(canvas.left, bg), contrast(canvas.right, bg)))),
+      left: Math.min(...plotChecks.map(bg => contrast(canvas.left, bg))), right: Math.min(...plotChecks.map(bg => contrast(canvas.right, bg))), highlightAlpha,
+      ambientAlpha, ambientCombinedAlpha: 1 - (1 - ambientAlpha) ** 3, noiseAlpha,
       ambientEnvelope: ambientEnvelope.map(toHex),
       surfaces: Object.fromEntries(Object.entries(surfaces).map(([key, rgb]) => [key, toHex(rgb)]))}};
   }

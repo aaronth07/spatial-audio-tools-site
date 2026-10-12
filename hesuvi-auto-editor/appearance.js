@@ -14,6 +14,7 @@
   $('reset-color').onclick=()=>{state.colors[state.theme]=defaults[state.theme];apply();};
   const reduce=matchMedia('(prefers-reduced-motion: reduce)'),fine=matchMedia('(hover: hover) and (pointer: fine)');
   let pending=0,targetX=0,targetY=0,currentX=0,currentY=0,lastTime=0;
+  let localSurfaces=[],pointerX=0,pointerY=0,currentPointerX=0,currentPointerY=0;
   const root=document.documentElement;
   function writeLighting(){
     root.style.setProperty('--light-x',(currentX*36).toFixed(2)+'px');
@@ -28,16 +29,32 @@
     const dt=Math.min(50,time-lastTime||16);lastTime=time;
     const amount=1-Math.exp(-dt/110);
     currentX+=(targetX-currentX)*amount;currentY+=(targetY-currentY)*amount;
+    currentPointerX+=(pointerX-currentPointerX)*amount;
+    currentPointerY+=(pointerY-currentPointerY)*amount;
+    for(const {element,rect} of localSurfaces){
+      element.style.setProperty('--pointer-x',Math.max(0,Math.min(rect.width,currentPointerX-rect.left)).toFixed(2)+'px');
+      element.style.setProperty('--pointer-y',Math.max(0,Math.min(rect.height,currentPointerY-rect.top)).toFixed(2)+'px');
+    }
     writeLighting();
-    if(Math.abs(targetX-currentX)+Math.abs(targetY-currentY)>.002)pending=requestAnimationFrame(renderLighting);
+    if(Math.abs(targetX-currentX)+Math.abs(targetY-currentY)>.002||Math.abs(pointerX-currentPointerX)+Math.abs(pointerY-currentPointerY)>.15)pending=requestAnimationFrame(renderLighting);
     else{currentX=targetX;currentY=targetY;writeLighting();pending=0;lastTime=0;}
   }
-  function clearLighting(){if(pending)cancelAnimationFrame(pending);pending=0;lastTime=0;targetX=targetY=currentX=currentY=0;writeLighting();}
+  function clearLocalLighting(){for(const {element} of localSurfaces)element.style.removeProperty("--local-light");localSurfaces=[];}
+  function clearLighting(){clearLocalLighting();if(pending)cancelAnimationFrame(pending);pending=0;lastTime=0;targetX=targetY=currentX=currentY=0;writeLighting();}
   document.addEventListener('pointermove',e=>{
     if(e.pointerType==='touch'||reduce.matches||!fine.matches||state.layout!=='glass')return;
+    pointerX=e.clientX;pointerY=e.clientY;
+    const control=e.target instanceof Element?e.target.closest('button:not(:disabled),a.button,summary,input:not(:disabled),select'):null;
+    const surface=e.target instanceof Element?e.target.closest('#drop-zone,#editor,#output,dialog'):null;
+    const next=[...new Set([control,surface].filter(Boolean))];
+    if(next.some(element=>!localSurfaces.some(entry=>entry.element===element))||next.length!==localSurfaces.length){
+      clearLocalLighting();currentPointerX=pointerX;currentPointerY=pointerY;
+      localSurfaces=next.map(element=>({element,rect:element.getBoundingClientRect()}));
+      for(const {element} of localSurfaces)element.style.setProperty('--local-light','1');
+    }
     targetX=Math.max(-1,Math.min(1,e.clientX/innerWidth*2-1));targetY=Math.max(-1,Math.min(1,e.clientY/innerHeight*2-1));
     if(!pending)pending=requestAnimationFrame(renderLighting);
   },{passive:true});
-  document.documentElement.addEventListener('pointerleave',()=>{targetX=targetY=0;if(!pending&&!reduce.matches&&state.layout==='glass')pending=requestAnimationFrame(renderLighting);});
-  document.addEventListener('pointercancel',clearLighting);window.addEventListener('blur',clearLighting);window.addEventListener('resize',clearLighting);reduce.addEventListener('change',clearLighting);fine.addEventListener('change',clearLighting);
+  document.documentElement.addEventListener('pointerleave',()=>{clearLocalLighting();targetX=targetY=0;if(!pending&&!reduce.matches&&state.layout==='glass')pending=requestAnimationFrame(renderLighting);});
+  document.addEventListener('pointercancel',clearLighting);window.addEventListener('blur',clearLighting);window.addEventListener('resize',clearLighting);window.addEventListener('scroll',clearLocalLighting,{passive:true});reduce.addEventListener('change',clearLighting);fine.addEventListener('change',clearLighting);
 })();
