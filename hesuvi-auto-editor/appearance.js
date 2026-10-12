@@ -13,48 +13,70 @@
   $('color-form').onsubmit=e=>{e.preventDefault();const color=$('base-color').value.trim();if(!HesuviMaterials.parseColor(color)){$('color-error').textContent='Enter an opaque OKLCH color or a 3- or 6-digit hex color.';$('color-error').hidden=false;return;}state.colors[state.theme]=color;apply();};
   $('reset-color').onclick=()=>{state.colors[state.theme]=defaults[state.theme];apply();};
   const reduce=matchMedia('(prefers-reduced-motion: reduce)'),fine=matchMedia('(hover: hover) and (pointer: fine)');
-  let pending=0,targetX=0,targetY=0,currentX=0,currentY=0,lastTime=0;
-  let localSurfaces=[],pointerX=0,pointerY=0,currentPointerX=0,currentPointerY=0;
-  const root=document.documentElement;
-  function writeLighting(){
-    root.style.setProperty('--light-x',(currentX*36).toFixed(2)+'px');
-    root.style.setProperty('--light-y',(currentY*28).toFixed(2)+'px');
-    root.style.setProperty('--light-angle',(120+currentX*28+currentY*16).toFixed(2)+'deg');
-    root.style.setProperty('--cast-x',(-currentX*8).toFixed(2)+'px');
-    root.style.setProperty('--cast-y',(8-currentY*5).toFixed(2)+'px');
-    root.style.setProperty('--edge-x',(-currentX).toFixed(2)+'px');
-    root.style.setProperty('--edge-y',(1-currentY*.6).toFixed(2)+'px');
+  const ambient=document.querySelector('.ambient-lights'),workspace=document.querySelector('main');
+  let pending=0,point=null,active=[],currentX=0,currentY=0,lastTime=0,lastShadowTime=0;
+  let shadowX=NaN,shadowY=NaN;
+  function clearLocal(){for(const entry of active)entry.clip.remove();active=[];}
+  function clearLighting(){
+    if(pending)cancelAnimationFrame(pending);
+    pending=0;point=null;lastTime=lastShadowTime=0;currentX=currentY=0;
+    shadowX=shadowY=NaN;clearLocal();ambient.style.removeProperty('transform');
+    for(const element of [workspace,$('appearance-dialog')]){
+      element.style.removeProperty('--cast-x');element.style.removeProperty('--cast-y');
+    }
+  }
+  function setLocalTargets(target,x,y){
+    const control=target.closest('button:not(:disabled),a.button,summary');
+    const surface=target.closest('#drop-zone,#editor,#output,dialog');
+    const elements=[...new Set([control,surface].filter(Boolean))];
+    if(elements.length===active.length&&elements.every(element=>active.some(entry=>entry.element===element)))return;
+    const rects=elements.map(element=>element.getBoundingClientRect());
+    const next=elements.map((element,index)=>{
+      const existing=active.find(entry=>entry.element===element);if(existing)return existing;
+      const clip=document.createElement('span'),light=document.createElement('span');
+      clip.className='light-clip';clip.setAttribute('aria-hidden','true');light.className='cursor-light';
+      clip.append(light);element.append(clip);
+      return {element,clip,light,rect:rects[index],x:x-rects[index].left,y:y-rects[index].top,shown:false};
+    });
+    for(const entry of active)if(!elements.includes(entry.element))entry.clip.remove();
+    active=next;
   }
   function renderLighting(time){
+    pending=0;if(!point)return;
     const dt=Math.min(50,time-lastTime||16);lastTime=time;
-    const amount=1-Math.exp(-dt/110);
+    const amount=1-Math.exp(-dt/110),localAmount=1-Math.exp(-dt/45);
+    const targetX=point.x/innerWidth*2-1,targetY=point.y/innerHeight*2-1;
     currentX+=(targetX-currentX)*amount;currentY+=(targetY-currentY)*amount;
-    currentPointerX+=(pointerX-currentPointerX)*amount;
-    currentPointerY+=(pointerY-currentPointerY)*amount;
-    for(const {element,rect} of localSurfaces){
-      element.style.setProperty('--pointer-x',Math.max(0,Math.min(rect.width,currentPointerX-rect.left)).toFixed(2)+'px');
-      element.style.setProperty('--pointer-y',Math.max(0,Math.min(rect.height,currentPointerY-rect.top)).toFixed(2)+'px');
+    ambient.style.transform=`translate3d(${(currentX*24).toFixed(2)}px,${(currentY*18).toFixed(2)}px,0)`;
+    let moving=Math.abs(targetX-currentX)+Math.abs(targetY-currentY)>.004;
+    for(const entry of active){
+      const x=point.x-entry.rect.left,y=point.y-entry.rect.top;
+      entry.x+=(x-entry.x)*localAmount;entry.y+=(y-entry.y)*localAmount;
+      entry.light.style.transform=`translate3d(${(entry.x-32).toFixed(2)}px,${(entry.y-32).toFixed(2)}px,0)`;
+      if(!entry.shown){entry.shown=true;entry.light.style.opacity='1';}
+      moving ||= Math.abs(x-entry.x)+Math.abs(y-entry.y)>.25;
     }
-    writeLighting();
-    if(Math.abs(targetX-currentX)+Math.abs(targetY-currentY)>.002||Math.abs(pointerX-currentPointerX)+Math.abs(pointerY-currentPointerY)>.15)pending=requestAnimationFrame(renderLighting);
-    else{currentX=targetX;currentY=targetY;writeLighting();pending=0;lastTime=0;}
+    if(time-lastShadowTime>=100){
+      const x=Math.round(currentX*3),y=Math.round(6-currentY*2);
+      if(x!==shadowX||y!==shadowY){
+        shadowX=x;shadowY=y;
+        workspace.style.setProperty('--cast-x',-x+'px');workspace.style.setProperty('--cast-y',y+'px');
+        if($('appearance-dialog').open){$('appearance-dialog').style.setProperty('--cast-x',-x+'px');$('appearance-dialog').style.setProperty('--cast-y',y+'px');}
+      }
+      lastShadowTime=time;
+    }
+    if(moving)pending=requestAnimationFrame(renderLighting);else lastTime=0;
   }
-  function clearLocalLighting(){for(const {element} of localSurfaces)element.style.removeProperty("--local-light");localSurfaces=[];}
-  function clearLighting(){clearLocalLighting();if(pending)cancelAnimationFrame(pending);pending=0;lastTime=0;targetX=targetY=currentX=currentY=0;writeLighting();}
-  document.addEventListener('pointermove',e=>{
-    if(e.pointerType==='touch'||reduce.matches||!fine.matches||state.layout!=='glass')return;
-    pointerX=e.clientX;pointerY=e.clientY;
-    const control=e.target instanceof Element?e.target.closest('button:not(:disabled),a.button,summary,input:not(:disabled),select'):null;
-    const surface=e.target instanceof Element?e.target.closest('#drop-zone,#editor,#output,dialog'):null;
-    const next=[...new Set([control,surface].filter(Boolean))];
-    if(next.some(element=>!localSurfaces.some(entry=>entry.element===element))||next.length!==localSurfaces.length){
-      clearLocalLighting();currentPointerX=pointerX;currentPointerY=pointerY;
-      localSurfaces=next.map(element=>({element,rect:element.getBoundingClientRect()}));
-      for(const {element} of localSurfaces)element.style.setProperty('--local-light','1');
-    }
-    targetX=Math.max(-1,Math.min(1,e.clientX/innerWidth*2-1));targetY=Math.max(-1,Math.min(1,e.clientY/innerHeight*2-1));
+  document.addEventListener('pointermove',event=>{
+    if(event.pointerType==='touch'||reduce.matches||!fine.matches||state.layout!=='glass'||!(event.target instanceof Element))return;
+    point={x:event.clientX,y:event.clientY};
+    setLocalTargets(event.target,point.x,point.y);
     if(!pending)pending=requestAnimationFrame(renderLighting);
   },{passive:true});
-  document.documentElement.addEventListener('pointerleave',()=>{clearLocalLighting();targetX=targetY=0;if(!pending&&!reduce.matches&&state.layout==='glass')pending=requestAnimationFrame(renderLighting);});
-  document.addEventListener('pointercancel',clearLighting);window.addEventListener('blur',clearLighting);window.addEventListener('resize',clearLighting);window.addEventListener('scroll',clearLocalLighting,{passive:true});reduce.addEventListener('change',clearLighting);fine.addEventListener('change',clearLighting);
+  document.documentElement.addEventListener('pointerleave',clearLighting);
+  document.addEventListener('pointerdown',event=>{if(event.pointerType==='touch')clearLighting();},{passive:true});
+  document.addEventListener('pointercancel',clearLighting);window.addEventListener('blur',clearLighting);
+  window.addEventListener('resize',clearLighting);window.addEventListener('scroll',clearLocal,{passive:true});
+  document.addEventListener('toggle',clearLocal,true);
+  reduce.addEventListener('change',clearLighting);fine.addEventListener('change',clearLighting);
 })();
