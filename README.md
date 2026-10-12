@@ -1,8 +1,8 @@
 # Spatial Audio Tools site
 
-Public, documentation-only GitHub Pages source. The site contains the HeSuVi Auto Editor setup/usage page and its existing local-only browser helper, plus a simple landing page and a blank Apple2Sofa route.
+Spatial Audio Tools provides browser-based tools for preparing and processing spatial audio impulse responses. The HeSuVi Auto Editor page currently inspects WAV files and prepares settings for the Python converter.
 
-The browser helper inspects RIFF WAV headers and exports a local CLI configuration. It does not decode samples, run DSP, or upload audio. Audio conversion runs in the local Python CLI.
+The HeSuVi Auto Editor checks RIFF WAV headers, prepares a CLI configuration, and guides users through local conversion with the Python CLI.
 
 ## Frontend tests
 
@@ -11,5 +11,3 @@ Requires Node.js 18 or newer:
 ```sh
 node --test tests/frontend.test.cjs
 ```
-
-No source code is included in this repository.
