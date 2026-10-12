@@ -30,3 +30,4 @@ summary{border-radius:4px;padding:3px 7px;margin-left:-7px}
 [data-layout="simple"] #choose{background:var(--accent);color:var(--accent-text)}
 @media(max-width:650px){header{flex-direction:column}.header-tools{flex-direction:row;align-items:center;justify-content:space-between;width:100%;gap:10px}.layout-label{margin-left:auto;gap:6px}.local{font-size:12px}.layout-label select{padding:6px;min-width:78px}.header-tools button{min-height:36px}header p{max-width:none}main{padding-bottom:40px}}
 @media(prefers-reduced-motion:reduce),(hover:none),(pointer:coarse){[data-layout="glass"] :is(button,.button,summary):hover{transform:none}}
+@media(prefers-reduced-motion:reduce){[data-layout="glass"] :is(button,.button):active{transform:none}}
