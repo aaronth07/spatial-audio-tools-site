@@ -1,13 +1,11 @@
-# Spatial Audio Tools site
+# Spatial Audio Tools
 
-Spatial Audio Tools provides browser-based tools for preparing and processing spatial audio impulse responses. The HeSuVi Auto Editor converts stereo 7.1 captures to aligned 14-channel WAV files locally in the browser.
+This site links to the spatial audio projects and keeps the Apple2Sofa project page.
 
-The editor includes Simple and Glass layouts, light and dark themes, impulse-response plots, and output statistics. Runtime files live under `hesuvi-auto-editor/`; no build step is required.
+[Open Spatial Audio Tools](https://aaronth07.github.io/spatial-audio-tools-site/).
 
-## Frontend tests
+The HeSuVi Auto Editor has moved to [its own site](https://aaronth07.github.io/hesuvi-auto-editor/) and [repository](https://github.com/aaronth07/hesuvi-auto-editor). Its Python script, browser processor, frontend, tests, and documentation are maintained there. This repository no longer contains a copied HeSuVi implementation.
 
-Requires Node.js 18 or newer:
+The previous `/hesuvi-auto-editor/` address redirects to the new site, so existing links continue to work. Earlier copies remain in Git history for reference.
 
-```sh
-node --test tests/frontend.test.cjs
-```
+GitHub Pages serves this repository from the root of `main`. The HeSuVi repository publishes its own `docs/` directory; it does not copy the app back into this site.
